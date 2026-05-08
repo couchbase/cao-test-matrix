@@ -59,7 +59,7 @@ pipeline {
     stage('Generate & Dispatch') {
       steps {
         script {
-          def branches = readJSON text: env.ENABLED_BRANCHES
+          def branches = new groovy.json.JsonSlurper().parseText(env.ENABLED_BRANCHES)
           def dateArg = ''
           if (params.date_override?.trim()) {
             dateArg = "-date ${params.date_override}"
@@ -77,7 +77,7 @@ pipeline {
 
             sh "cat generate-matrix-${branchName}.log"
 
-            def matrix = readJSON text: rawOutput
+            def matrix = new groovy.json.JsonSlurper().parseText(rawOutput)
             echo "Generated matrix for ${branchName}:\n${rawOutput}"
 
             descriptions.add("${matrix.platform}/${branchName}/k8s:${matrix.kubernetes_version}/srv:${matrix.server_image}")
