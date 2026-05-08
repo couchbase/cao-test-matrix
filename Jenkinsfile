@@ -31,7 +31,6 @@ pipeline {
     GOVERSION = '1.22.1'
     GOROOT = "${env.WORKSPACE}/go"
     PATH = "${env.WORKSPACE}/go/bin:${env.WORKSPACE}/bin:$PATH"
-    GHCR_CREDENTIALS = credentials('couchbaseqe-ghrc')
   }
 
   stages {
@@ -70,10 +69,13 @@ pipeline {
           for (branchName in branches) {
             echo "=== Generating matrix for branch: ${branchName} ==="
 
-            def rawOutput = sh(
-              script: "go run generate-matrix.go -config ${params.config_path} -branch ${branchName} ${dateArg} -ghcr-user ${env.GHCR_CREDENTIALS_USR} -ghcr-pass ${env.GHCR_CREDENTIALS_PSW} 2>generate-matrix-${branchName}.log",
-              returnStdout: true
-            ).trim()
+            def rawOutput = ''
+            withCredentials([usernamePassword(credentialsId: 'couchbaseqe-ghrc', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_PASS')]) {
+              rawOutput = sh(
+                script: 'go run generate-matrix.go -config ' + params.config_path + ' -branch ' + branchName + ' ' + dateArg + ' -ghcr-user $GHCR_USER -ghcr-pass $GHCR_PASS 2>generate-matrix-' + branchName + '.log',
+                returnStdout: true
+              ).trim()
+            }
 
             sh "cat generate-matrix-${branchName}.log"
 
