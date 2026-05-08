@@ -448,7 +448,12 @@ func findLatestGHCRBuild(registry, image, baseVersion, ghcrUser, ghcrPass string
 		if linkHeader != "" {
 			re := regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
 			if lm := re.FindStringSubmatch(linkHeader); lm != nil {
-				nextURL = lm[1]
+				parsed := lm[1]
+				// GHCR returns relative URLs in Link header; prepend base URL.
+				if len(parsed) > 0 && parsed[0] == '/' {
+					parsed = "https://ghcr.io" + parsed
+				}
+				nextURL = parsed
 			}
 		}
 	}
