@@ -1,0 +1,149 @@
+{
+  "Versions": [
+    {
+      "VersionBranch": "master",
+      "refspec": "refs/heads/master",
+      "supportedServerVersions": [
+        {"version": "8.0.0", "weight": 5},
+        {"version": "7.6.0", "weight": 4},
+        {"version": "7.2.0", "weight": 2},
+        {"version": "7.1.0", "weight": 1},
+        {"version": "7.0.0", "weight": 1}
+      ],
+      "upgradePaths": {
+        "8.0.0": ["7.6.0", "7.2.0"],
+        "7.6.0": ["7.2.0", "7.1.0"],
+        "7.2.0": ["7.1.0", "7.0.0"],
+        "7.1.0": ["7.0.0"],
+        "7.0.0": []
+      },
+      "supportedPlatforms": [
+        {
+          "Platform": "GKE",
+          "enabled": true,
+          "versions": ["1.29", "1.30", "1.31"],
+          "storageClass": "standard-rwo",
+          "platformType": "kubernetes"
+        },
+        {
+          "Platform": "EKS",
+          "enabled": true,
+          "versions": ["1.29", "1.30", "1.31"],
+          "storageClass": "gp2",
+          "platformType": "kubernetes"
+        },
+        {
+          "Platform": "AKS",
+          "enabled": true,
+          "versions": ["1.29.1", "1.30.1", "1.31.1"],
+          "storageClass": "default",
+          "platformType": "kubernetes"
+        },
+        {
+          "Platform": "OpenShift",
+          "enabled": true,
+          "versions": ["4.15", "4.16", "4.17"],
+          "storageClass": "gp2",
+          "platformType": "openshift"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "VersionBranch": "2.9.x",
+      "refspec": "refs/heads/2.9.x",
+      "supportedServerVersions": [
+        {"version": "7.6.0", "weight": 4},
+        {"version": "7.2.0", "weight": 2},
+        {"version": "7.1.0", "weight": 1},
+        {"version": "7.0.0", "weight": 1}
+      ],
+      "upgradePaths": {
+        "7.6.0": ["7.2.0", "7.1.0"],
+        "7.2.0": ["7.1.0", "7.0.0"],
+        "7.1.0": ["7.0.0"],
+        "7.0.0": []
+      },
+      "supportedPlatforms": [
+        {
+          "Platform": "GKE",
+          "enabled": true,
+          "versions": ["1.29", "1.30", "1.31"],
+          "storageClass": "standard-rwo",
+          "platformType": "kubernetes"
+        },
+        {
+          "Platform": "EKS",
+          "enabled": true,
+          "versions": ["1.29", "1.30", "1.31"],
+          "storageClass": "gp2",
+          "platformType": "kubernetes"
+        },
+        {
+          "Platform": "AKS",
+          "enabled": true,
+          "versions": ["1.29.1", "1.30.1", "1.31.1"],
+          "storageClass": "default",
+          "platformType": "kubernetes"
+        },
+        {
+          "Platform": "OpenShift",
+          "enabled": true,
+          "versions": ["4.15", "4.16", "4.17"],
+          "storageClass": "gp2",
+          "platformType": "openshift"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "VersionBranch": "2.8.x",
+      "refspec": "refs/heads/2.8.x",
+      "supportedServerVersions": [
+        {"version": "7.6.0", "weight": 3},
+        {"version": "7.2.0", "weight": 2},
+        {"version": "7.1.0", "weight": 1},
+        {"version": "7.0.0", "weight": 1},
+        {"version": "6.6.0", "weight": 1}
+      ],
+      "upgradePaths": {
+        "7.6.0": ["7.2.0", "7.1.0"],
+        "7.2.0": ["7.1.0", "7.0.0"],
+        "7.1.0": ["7.0.0", "6.6.0"],
+        "7.0.0": ["6.6.0"],
+        "6.6.0": []
+      },
+      "supportedPlatforms": [
+        {
+          "Platform": "GKE",
+          "enabled": true,
+          "versions": ["1.29", "1.30", "1.31"],
+          "storageClass": "standard-rwo",
+          "platformType": "kubernetes"
+        },
+        {
+          "Platform": "EKS",
+          "enabled": true,
+          "versions": ["1.29", "1.30", "1.31"],
+          "storageClass": "gp2",
+          "platformType": "kubernetes"
+        },
+        {
+          "Platform": "AKS",
+          "enabled": true,
+          "versions": ["1.29.1", "1.30.1", "1.31.1"],
+          "storageClass": "default",
+          "platformType": "kubernetes"
+        },
+        {
+          "Platform": "OpenShift",
+          "enabled": true,
+          "versions": ["4.15", "4.16", "4.17"],
+          "storageClass": "gp2",
+          "platformType": "openshift"
+        }
+      ],
+      "enabled": false
+    }
+  ]
+}
