@@ -401,46 +401,62 @@ func findLatestGHCRBuild(registry, image, baseVersion, ghcrUser, ghcrPass string
 	}
 	log.Printf("GHCR token obtained (length=%d)", len(tok.Token))
 
-	// List tags
-	tagsURL := fmt.Sprintf("https://ghcr.io/v2/%s/%s/tags/list", registry, image)
-	req, _ := http.NewRequest("GET", tagsURL, nil)
-	req.Header.Set("Authorization", "Bearer "+tok.Token)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("list GHCR tags: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("GHCR tags list returned HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	var tagList GHCRTagList
-	if err = json.NewDecoder(resp.Body).Decode(&tagList); err != nil {
-		return "", fmt.Errorf("decode GHCR tags: %w", err)
-	}
-	log.Printf("GHCR returned %d tags for %s/%s", len(tagList.Tags), registry, image)
-
-	// Filter tags matching baseVersion-NNN pattern
+	// List all tags with pagination
 	pattern := regexp.MustCompile(`^` + regexp.QuoteMeta(baseVersion) + `-(\d+)$`)
 	type buildTag struct {
 		tag    string
 		number int
 	}
 	var matches []buildTag
+	totalTags := 0
 
-	for _, tag := range tagList.Tags {
-		m := pattern.FindStringSubmatch(tag)
-		if m != nil {
-			num, _ := strconv.Atoi(m[1])
-			matches = append(matches, buildTag{tag: tag, number: num})
+	nextURL := fmt.Sprintf("https://ghcr.io/v2/%s/%s/tags/list?n=1000", registry, image)
+	for nextURL != "" {
+		req, _ := http.NewRequest("GET", nextURL, nil)
+		req.Header.Set("Authorization", "Bearer "+tok.Token)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("list GHCR tags: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			return "", fmt.Errorf("GHCR tags list returned HTTP %d: %s", resp.StatusCode, string(body))
+		}
+
+		var tagList GHCRTagList
+		if err = json.NewDecoder(resp.Body).Decode(&tagList); err != nil {
+			resp.Body.Close()
+			return "", fmt.Errorf("decode GHCR tags: %w", err)
+		}
+		resp.Body.Close()
+
+		totalTags += len(tagList.Tags)
+		for _, tag := range tagList.Tags {
+			m := pattern.FindStringSubmatch(tag)
+			if m != nil {
+				num, _ := strconv.Atoi(m[1])
+				matches = append(matches, buildTag{tag: tag, number: num})
+			}
+		}
+
+		// Follow pagination via Link header
+		nextURL = ""
+		linkHeader := resp.Header.Get("Link")
+		if linkHeader != "" {
+			re := regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
+			if lm := re.FindStringSubmatch(linkHeader); lm != nil {
+				nextURL = lm[1]
+			}
 		}
 	}
 
+	log.Printf("GHCR returned %d total tags for %s/%s, %d matched %s-NNN", totalTags, registry, image, len(matches), baseVersion)
+
 	if len(matches) == 0 {
-		return "", fmt.Errorf("no tags matching %s-NNN found in %s/%s", baseVersion, registry, image)
+		return "", fmt.Errorf("no tags matching %s-NNN found in %s/%s (%d total tags scanned)", baseVersion, registry, image, totalTags)
 	}
 
 	sort.Slice(matches, func(i, j int) bool {
