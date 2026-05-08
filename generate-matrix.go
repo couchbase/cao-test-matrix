@@ -102,13 +102,17 @@ func main() {
 	configPath := flag.String("config", "matrix-config.json", "Path to matrix config JSON")
 	dateOverride := flag.String("date", "", "Override date for testing (YYYY-MM-DD)")
 	skipManifest := flag.Bool("skip-manifest", false, "Skip manifest lookup, use latest tag for operator")
-	ghcrToken := flag.String("ghcr-token", "", "GHCR token for authenticated tag listing (or set GHCR_TOKEN env var)")
+	ghcrUser := flag.String("ghcr-user", "", "GHCR username for authenticated tag listing")
+	ghcrPass := flag.String("ghcr-pass", "", "GHCR password/PAT for authenticated tag listing")
 	branchOverride := flag.String("branch", "", "Override branch selection (e.g. master, 2.9.x)")
 	listBranches := flag.Bool("list-branches", false, "Print enabled branch names as JSON array and exit")
 	flag.Parse()
 
-	if *ghcrToken == "" {
-		*ghcrToken = os.Getenv("GHCR_TOKEN")
+	if *ghcrUser == "" {
+		*ghcrUser = os.Getenv("GHCR_USER")
+	}
+	if *ghcrPass == "" {
+		*ghcrPass = os.Getenv("GHCR_PASS")
 	}
 
 	data, err := os.ReadFile(*configPath)
@@ -143,7 +147,7 @@ func main() {
 		now = parsed
 	}
 
-	output := generateMatrixForBranch(config, now, *skipManifest, *ghcrToken, *branchOverride)
+	output := generateMatrixForBranch(config, now, *skipManifest, *ghcrUser, *ghcrPass, *branchOverride)
 
 	jsonOut, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
@@ -155,10 +159,10 @@ func main() {
 
 // generateMatrix picks a single branch via round-robin (legacy behavior for tests).
 func generateMatrix(config MatrixConfig, now time.Time, skipManifest bool, ghcrToken string) MatrixOutput {
-	return generateMatrixForBranch(config, now, skipManifest, ghcrToken, "")
+	return generateMatrixForBranch(config, now, skipManifest, "", ghcrToken, "")
 }
 
-func generateMatrixForBranch(config MatrixConfig, now time.Time, skipManifest bool, ghcrToken string, branchOverride string) MatrixOutput {
+func generateMatrixForBranch(config MatrixConfig, now time.Time, skipManifest bool, ghcrUser string, ghcrPass string, branchOverride string) MatrixOutput {
 	enabledBranches := getEnabledBranches(config)
 	if len(enabledBranches) == 0 {
 		log.Fatal("No enabled version branches found")
@@ -209,7 +213,7 @@ func generateMatrixForBranch(config MatrixConfig, now time.Time, skipManifest bo
 	log.Printf("Selected upgrade version: %s", upgradeVersion)
 
 	// Step 6: Resolve operator image from manifest
-	operatorTag := resolveOperatorTag(branch.VersionBranch, platform, skipManifest, ghcrToken)
+	operatorTag := resolveOperatorTag(branch.VersionBranch, platform, skipManifest, ghcrUser, ghcrPass)
 
 	// Step 7: Build all images
 	serverImage := resolveServerImage(serverVersion, platform)
@@ -299,7 +303,7 @@ func selectUpgradeVersion(upgradePaths map[string][]string, serverVersion string
 // resolveOperatorTag fetches the manifest XML for the branch, extracts the base
 // version, then queries GHCR for the latest build tag matching that base version.
 // Falls back to "latest" on any error.
-func resolveOperatorTag(branch string, platform Platform, skipManifest bool, ghcrToken string) string {
+func resolveOperatorTag(branch string, platform Platform, skipManifest bool, ghcrUser string, ghcrPass string) string {
 	if skipManifest {
 		log.Printf("Manifest lookup skipped, using 'latest' tag")
 		return "latest"
@@ -317,7 +321,7 @@ func resolveOperatorTag(branch string, platform Platform, skipManifest bool, ghc
 	}
 	log.Printf("Manifest base version for %s: %s", branch, baseVersion)
 
-	latestTag, err := findLatestGHCRBuild(registry, "operator", baseVersion, ghcrToken)
+	latestTag, err := findLatestGHCRBuild(registry, "operator", baseVersion, ghcrUser, ghcrPass)
 	if err != nil {
 		log.Printf("WARNING: Failed to find latest GHCR build: %v. Falling back to 'latest'", err)
 		return "latest"
@@ -370,33 +374,31 @@ func fetchManifestVersion(branch string) (string, error) {
 
 // findLatestGHCRBuild queries the GHCR registry for tags matching baseVersion-NNN
 // and returns the one with the highest build number.
-func findLatestGHCRBuild(registry, image, baseVersion, ghcrToken string) (string, error) {
+func findLatestGHCRBuild(registry, image, baseVersion, ghcrUser, ghcrPass string) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	var bearerToken string
 
-	if ghcrToken != "" {
-		// Use provided token directly for authenticated access
-		bearerToken = ghcrToken
-	} else {
-		// Get anonymous auth token
-		tokenURL := fmt.Sprintf("https://ghcr.io/token?scope=repository:%s/%s:pull", registry, image)
-		resp, err := client.Get(tokenURL)
-		if err != nil {
-			return "", fmt.Errorf("fetch GHCR token: %w", err)
-		}
-		defer resp.Body.Close()
+	// Get bearer token from GHCR token endpoint, with optional Basic auth for private packages.
+	tokenURL := fmt.Sprintf("https://ghcr.io/token?scope=repository:%s/%s:pull", registry, image)
+	tokenReq, _ := http.NewRequest("GET", tokenURL, nil)
+	if ghcrUser != "" && ghcrPass != "" {
+		tokenReq.SetBasicAuth(ghcrUser, ghcrPass)
+	}
 
-		var tokenResp GHCRToken
-		if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-			return "", fmt.Errorf("decode GHCR token: %w", err)
-		}
-		bearerToken = tokenResp.Token
+	tokenResp, err := client.Do(tokenReq)
+	if err != nil {
+		return "", fmt.Errorf("fetch GHCR token: %w", err)
+	}
+	defer tokenResp.Body.Close()
+
+	var tok GHCRToken
+	if err := json.NewDecoder(tokenResp.Body).Decode(&tok); err != nil {
+		return "", fmt.Errorf("decode GHCR token: %w", err)
 	}
 
 	// List tags
 	tagsURL := fmt.Sprintf("https://ghcr.io/v2/%s/%s/tags/list", registry, image)
 	req, _ := http.NewRequest("GET", tagsURL, nil)
-	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	req.Header.Set("Authorization", "Bearer "+tok.Token)
 
 	resp, err := client.Do(req)
 	if err != nil {

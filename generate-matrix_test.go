@@ -258,7 +258,7 @@ func TestBranchOverride(t *testing.T) {
 	}
 
 	// With override to 2.9.x, should get 2.9.x regardless of date
-	out = generateMatrixForBranch(config, date, true, "", "2.9.x")
+	out = generateMatrixForBranch(config, date, true, "", "", "2.9.x")
 	if out.VersionBranch != "2.9.x" {
 		t.Errorf("Expected 2.9.x with override, got %s", out.VersionBranch)
 	}

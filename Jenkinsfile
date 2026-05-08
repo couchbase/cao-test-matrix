@@ -71,7 +71,7 @@ pipeline {
             echo "=== Generating matrix for branch: ${branchName} ==="
 
             def rawOutput = sh(
-              script: "go run generate-matrix.go -config ${params.config_path} -branch ${branchName} ${dateArg} -ghcr-token ${env.GHCR_CREDENTIALS_PSW} 2>generate-matrix-${branchName}.log",
+              script: "go run generate-matrix.go -config ${params.config_path} -branch ${branchName} ${dateArg} -ghcr-user ${env.GHCR_CREDENTIALS_USR} -ghcr-pass ${env.GHCR_CREDENTIALS_PSW} 2>generate-matrix-${branchName}.log",
               returnStdout: true
             ).trim()
 
