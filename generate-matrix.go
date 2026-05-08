@@ -390,10 +390,16 @@ func findLatestGHCRBuild(registry, image, baseVersion, ghcrUser, ghcrPass string
 	}
 	defer tokenResp.Body.Close()
 
+	if tokenResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(tokenResp.Body)
+		return "", fmt.Errorf("GHCR token request returned HTTP %d: %s", tokenResp.StatusCode, string(body))
+	}
+
 	var tok GHCRToken
 	if err := json.NewDecoder(tokenResp.Body).Decode(&tok); err != nil {
 		return "", fmt.Errorf("decode GHCR token: %w", err)
 	}
+	log.Printf("GHCR token obtained (length=%d)", len(tok.Token))
 
 	// List tags
 	tagsURL := fmt.Sprintf("https://ghcr.io/v2/%s/%s/tags/list", registry, image)
@@ -406,10 +412,16 @@ func findLatestGHCRBuild(registry, image, baseVersion, ghcrUser, ghcrPass string
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("GHCR tags list returned HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
 	var tagList GHCRTagList
 	if err = json.NewDecoder(resp.Body).Decode(&tagList); err != nil {
 		return "", fmt.Errorf("decode GHCR tags: %w", err)
 	}
+	log.Printf("GHCR returned %d tags for %s/%s", len(tagList.Tags), registry, image)
 
 	// Filter tags matching baseVersion-NNN pattern
 	pattern := regexp.MustCompile(`^` + regexp.QuoteMeta(baseVersion) + `-(\d+)$`)
