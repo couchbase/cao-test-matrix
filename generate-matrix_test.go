@@ -105,7 +105,7 @@ func TestRoundRobinPlatformSelection(t *testing.T) {
 }
 
 func TestRoundRobinK8sVersionSelection(t *testing.T) {
-	versions := []string{"1.29", "1.30", "1.31"}
+	versions := []string{"1.33", "1.34", "1.35"}
 
 	seen := make(map[string]bool)
 	for week := 1; week <= 10; week++ {
@@ -229,11 +229,11 @@ func TestKubectlVersionResolution(t *testing.T) {
 		platformType string
 		want         string
 	}{
-		{"1.31", "kubernetes", "1.31.0"},
-		{"1.30", "kubernetes", "1.30.0"},
-		{"1.29.1", "kubernetes", "1.29.1"},
-		{"1.31.1", "kubernetes", "1.31.1"},
-		{"4.17", "openshift", ""},
+		{"1.35", "kubernetes", "1.35.0"},
+		{"1.34", "kubernetes", "1.34.0"},
+		{"1.33", "kubernetes", "1.33.0"},
+		{"1.33.1", "kubernetes", "1.33.1"},
+		{"4.20", "openshift", ""},
 	}
 
 	for _, tt := range tests {

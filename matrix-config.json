@@ -21,28 +21,28 @@
         {
           "Platform": "GKE",
           "enabled": true,
-          "versions": ["1.29", "1.30", "1.31"],
+          "versions": ["1.33", "1.34", "1.35"],
           "storageClass": "standard-rwo",
           "platformType": "kubernetes"
         },
         {
           "Platform": "EKS",
           "enabled": true,
-          "versions": ["1.29", "1.30", "1.31"],
+          "versions": ["1.33", "1.34", "1.35"],
           "storageClass": "gp2",
           "platformType": "kubernetes"
         },
         {
           "Platform": "AKS",
           "enabled": true,
-          "versions": ["1.29.1", "1.30.1", "1.31.1"],
+          "versions": ["1.33", "1.34", "1.35"],
           "storageClass": "default",
           "platformType": "kubernetes"
         },
         {
           "Platform": "OpenShift",
           "enabled": true,
-          "versions": ["4.15", "4.16", "4.17"],
+          "versions": ["4.18", "4.19", "4.20"],
           "storageClass": "gp2",
           "platformType": "openshift"
         }
@@ -68,28 +68,28 @@
         {
           "Platform": "GKE",
           "enabled": true,
-          "versions": ["1.29", "1.30", "1.31"],
+          "versions": ["1.33", "1.34", "1.35"],
           "storageClass": "standard-rwo",
           "platformType": "kubernetes"
         },
         {
           "Platform": "EKS",
           "enabled": true,
-          "versions": ["1.29", "1.30", "1.31"],
+          "versions": ["1.33", "1.34", "1.35"],
           "storageClass": "gp2",
           "platformType": "kubernetes"
         },
         {
           "Platform": "AKS",
           "enabled": true,
-          "versions": ["1.29.1", "1.30.1", "1.31.1"],
+          "versions": ["1.33", "1.34", "1.35"],
           "storageClass": "default",
           "platformType": "kubernetes"
         },
         {
           "Platform": "OpenShift",
           "enabled": true,
-          "versions": ["4.15", "4.16", "4.17"],
+          "versions": ["4.18", "4.19", "4.20"],
           "storageClass": "gp2",
           "platformType": "openshift"
         }
@@ -117,28 +117,28 @@
         {
           "Platform": "GKE",
           "enabled": true,
-          "versions": ["1.29", "1.30", "1.31"],
+          "versions": ["1.33", "1.34", "1.35"],
           "storageClass": "standard-rwo",
           "platformType": "kubernetes"
         },
         {
           "Platform": "EKS",
           "enabled": true,
-          "versions": ["1.29", "1.30", "1.31"],
+          "versions": ["1.33", "1.34", "1.35"],
           "storageClass": "gp2",
           "platformType": "kubernetes"
         },
         {
           "Platform": "AKS",
           "enabled": true,
-          "versions": ["1.29.1", "1.30.1", "1.31.1"],
+          "versions": ["1.33", "1.34", "1.35"],
           "storageClass": "default",
           "platformType": "kubernetes"
         },
         {
           "Platform": "OpenShift",
           "enabled": true,
-          "versions": ["4.15", "4.16", "4.17"],
+          "versions": ["4.18", "4.19", "4.20"],
           "storageClass": "gp2",
           "platformType": "openshift"
         }
