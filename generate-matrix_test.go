@@ -311,9 +311,13 @@ func TestSidecarImageResolution(t *testing.T) {
 				t.Errorf("operator = %s, want %s", operator, expectedOperator)
 			}
 
-			// All sidecars except operator should use :latest
+			expectedCert := "ghcr.io/" + tt.wantRegistry + "/operator-certification:" + tt.operatorTag
+			if cert != expectedCert {
+				t.Errorf("cert = %s, want %s", cert, expectedCert)
+			}
+
 			for name, img := range map[string]string{
-				"admission": admission, "cert": cert, "backup": backup,
+				"admission": admission, "backup": backup,
 				"logging": logging, "cng": cng,
 			} {
 				if img == "" {
