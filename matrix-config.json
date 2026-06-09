@@ -51,7 +51,7 @@
     },
     {
       "VersionBranch": "2.9.x",
-      "refspec": "refs/heads/2.9.x",
+      "refspec": "master",
       "supportedServerVersions": [
         {"version": "7.6.0", "weight": 4},
         {"version": "7.2.0", "weight": 2},
@@ -98,7 +98,7 @@
     },
     {
       "VersionBranch": "2.8.x",
-      "refspec": "refs/heads/2.8.x",
+      "refspec": "master",
       "supportedServerVersions": [
         {"version": "7.6.0", "weight": 3},
         {"version": "7.2.0", "weight": 2},
