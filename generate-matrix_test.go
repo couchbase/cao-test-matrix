@@ -120,11 +120,12 @@ func TestRoundRobinK8sVersionSelection(t *testing.T) {
 
 func TestWeightedServerSelection(t *testing.T) {
 	versions := []ServerVersion{
-		{Version: "8.0.0", Weight: 5},
-		{Version: "7.6.0", Weight: 4},
-		{Version: "7.2.0", Weight: 2},
-		{Version: "7.1.0", Weight: 1},
-		{Version: "7.0.0", Weight: 1},
+		{Version: "8.5.0", Weight: 5},
+		{Version: "8.0.2", Weight: 4},
+		{Version: "7.6.12", Weight: 3},
+		{Version: "7.2.9", Weight: 2},
+		{Version: "7.1.5", Weight: 1},
+		{Version: "7.0.5", Weight: 1},
 	}
 
 	counts := make(map[string]int)
@@ -142,10 +143,10 @@ func TestWeightedServerSelection(t *testing.T) {
 		}
 	}
 
-	// 8.0.0 should be selected more than 7.0.0
-	if counts["8.0.0"] <= counts["7.0.0"] {
-		t.Errorf("8.0.0 (weight=5) should be selected more than 7.0.0 (weight=1): got %d vs %d",
-			counts["8.0.0"], counts["7.0.0"])
+	// 8.0.2 should be selected more than 7.0.5
+	if counts["8.0.2"] <= counts["7.0.5"] {
+		t.Errorf("8.0.2 (weight=4) should be selected more than 7.0.5 (weight=1): got %d vs %d",
+			counts["8.0.2"], counts["7.0.5"])
 	}
 
 	t.Logf("Distribution over 365 days: %v", counts)
@@ -153,25 +154,26 @@ func TestWeightedServerSelection(t *testing.T) {
 
 func TestUpgradePathSelection(t *testing.T) {
 	upgradePaths := map[string][]string{
-		"8.0.0": {"7.6.0", "7.2.0"},
-		"7.6.0": {"7.2.0", "7.1.0"},
-		"7.2.0": {"7.1.0", "7.0.0"},
-		"7.1.0": {"7.0.0"},
-		"7.0.0": {},
+		"8.5.0":  {"8.0.2", "7.6.12"},
+		"8.0.2":  {"7.6.12", "7.2.9"},
+		"7.6.12": {"7.2.9", "7.1.5"},
+		"7.2.9":  {"7.1.5", "7.0.5"},
+		"7.1.5":  {"7.0.5"},
+		"7.0.5":  {},
 	}
 
 	date := time.Date(2026, 5, 8, 0, 0, 0, 0, time.UTC)
 
-	// 8.0.0 should upgrade from 7.6.0 or 7.2.0
-	upgrade := selectUpgradeVersion(upgradePaths, "8.0.0", date)
-	if upgrade != "7.6.0" && upgrade != "7.2.0" {
-		t.Errorf("8.0.0 upgrade should be 7.6.0 or 7.2.0, got %s", upgrade)
+	// 8.0.2 should upgrade from 7.6.12 or 7.2.9
+	upgrade := selectUpgradeVersion(upgradePaths, "8.0.2", date)
+	if upgrade != "7.6.12" && upgrade != "7.2.9" {
+		t.Errorf("8.0.2 upgrade should be 7.6.12 or 7.2.9, got %s", upgrade)
 	}
 
-	// 7.0.0 has no upgrade path, should return itself
-	upgrade = selectUpgradeVersion(upgradePaths, "7.0.0", date)
-	if upgrade != "7.0.0" {
-		t.Errorf("7.0.0 should return itself (no upgrade path), got %s", upgrade)
+	// 7.0.5 has no upgrade path, should return itself
+	upgrade = selectUpgradeVersion(upgradePaths, "7.0.5", date)
+	if upgrade != "7.0.5" {
+		t.Errorf("7.0.5 should return itself (no upgrade path), got %s", upgrade)
 	}
 
 	// All paths should only contain valid versions
@@ -186,8 +188,9 @@ func TestUpgradePathSelection(t *testing.T) {
 
 func TestUpgradePathCoverage(t *testing.T) {
 	upgradePaths := map[string][]string{
-		"8.0.0": {"7.6.0", "7.2.0"},
-		"7.6.0": {"7.2.0", "7.1.0"},
+		"8.5.0":  {"8.0.2", "7.6.12"},
+		"8.0.2":  {"7.6.12", "7.2.9"},
+		"7.6.12": {"7.2.9", "7.1.5"},
 	}
 
 	// Over many days, both upgrade options should be selected
@@ -212,14 +215,14 @@ func TestServerImageResolution(t *testing.T) {
 	k8sPlatform := Platform{PlatformType: "kubernetes"}
 	ocPlatform := Platform{PlatformType: "openshift"}
 
-	k8sImage := resolveServerImage("8.0.0", k8sPlatform)
-	if k8sImage != "ghcr.io/cb-vanilla/server:8.0.0" {
-		t.Errorf("Expected ghcr.io/cb-vanilla/server:8.0.0, got %s", k8sImage)
+	k8sImage := resolveServerImage("8.0.2", k8sPlatform)
+	if k8sImage != "ghcr.io/cb-vanilla/server:8.0.2" {
+		t.Errorf("Expected ghcr.io/cb-vanilla/server:8.0.2, got %s", k8sImage)
 	}
 
-	ocImage := resolveServerImage("7.6.0", ocPlatform)
-	if ocImage != "registry.connect.redhat.com/couchbase/server:7.6.0" {
-		t.Errorf("Expected registry.connect.redhat.com/couchbase/server:7.6.0, got %s", ocImage)
+	ocImage := resolveServerImage("7.6.12", ocPlatform)
+	if ocImage != "registry.connect.redhat.com/couchbase/server:7.6.12" {
+		t.Errorf("Expected registry.connect.redhat.com/couchbase/server:7.6.12, got %s", ocImage)
 	}
 }
 

@@ -4,18 +4,20 @@
       "VersionBranch": "master",
       "refspec": "refs/heads/master",
       "supportedServerVersions": [
-        {"version": "8.0.0", "weight": 5},
-        {"version": "7.6.0", "weight": 4},
-        {"version": "7.2.0", "weight": 2},
-        {"version": "7.1.0", "weight": 1},
-        {"version": "7.0.0", "weight": 1}
+        {"version": "8.5.0", "weight": 5},
+        {"version": "8.0.2", "weight": 4},
+        {"version": "7.6.12", "weight": 3},
+        {"version": "7.2.9", "weight": 2},
+        {"version": "7.1.5", "weight": 1},
+        {"version": "7.0.5", "weight": 1}
       ],
       "upgradePaths": {
-        "8.0.0": ["7.6.0", "7.2.0"],
-        "7.6.0": ["7.2.0", "7.1.0"],
-        "7.2.0": ["7.1.0", "7.0.0"],
-        "7.1.0": ["7.0.0"],
-        "7.0.0": []
+        "8.5.0": ["8.0.2", "7.6.12"],
+        "8.0.2": ["7.6.12", "7.2.9"],
+        "7.6.12": ["7.2.9", "7.1.5"],
+        "7.2.9": ["7.1.5", "7.0.5"],
+        "7.1.5": ["7.0.5"],
+        "7.0.5": []
       },
       "supportedPlatforms": [
         {
@@ -53,16 +55,16 @@
       "VersionBranch": "2.9.x",
       "refspec": "refs/heads/master",
       "supportedServerVersions": [
-        {"version": "7.6.0", "weight": 4},
-        {"version": "7.2.0", "weight": 2},
-        {"version": "7.1.0", "weight": 1},
-        {"version": "7.0.0", "weight": 1}
+        {"version": "7.6.12", "weight": 4},
+        {"version": "7.2.9", "weight": 2},
+        {"version": "7.1.5", "weight": 1},
+        {"version": "7.0.5", "weight": 1}
       ],
       "upgradePaths": {
-        "7.6.0": ["7.2.0", "7.1.0"],
-        "7.2.0": ["7.1.0", "7.0.0"],
-        "7.1.0": ["7.0.0"],
-        "7.0.0": []
+        "7.6.12": ["7.2.9", "7.1.5"],
+        "7.2.9": ["7.1.5", "7.0.5"],
+        "7.1.5": ["7.0.5"],
+        "7.0.5": []
       },
       "supportedPlatforms": [
         {
@@ -100,18 +102,18 @@
       "VersionBranch": "2.8.x",
       "refspec": "refs/heads/master",
       "supportedServerVersions": [
-        {"version": "7.6.0", "weight": 3},
-        {"version": "7.2.0", "weight": 2},
-        {"version": "7.1.0", "weight": 1},
-        {"version": "7.0.0", "weight": 1},
-        {"version": "6.6.0", "weight": 1}
+        {"version": "7.6.12", "weight": 3},
+        {"version": "7.2.9", "weight": 2},
+        {"version": "7.1.5", "weight": 1},
+        {"version": "7.0.5", "weight": 1},
+        {"version": "6.6.6", "weight": 1}
       ],
       "upgradePaths": {
-        "7.6.0": ["7.2.0", "7.1.0"],
-        "7.2.0": ["7.1.0", "7.0.0"],
-        "7.1.0": ["7.0.0", "6.6.0"],
-        "7.0.0": ["6.6.0"],
-        "6.6.0": []
+        "7.6.12": ["7.2.9", "7.1.5"],
+        "7.2.9": ["7.1.5", "7.0.5"],
+        "7.1.5": ["7.0.5", "6.6.6"],
+        "7.0.5": ["6.6.6"],
+        "6.6.6": []
       },
       "supportedPlatforms": [
         {
