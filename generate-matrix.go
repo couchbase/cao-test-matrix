@@ -13,7 +13,11 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/crane"
 )
 
 // --- Config types ---
@@ -42,33 +46,38 @@ type VersionEntry struct {
 
 type MatrixConfig struct {
 	Versions []VersionEntry `json:"Versions"`
+	// SHAImageWeight is how many runs out of 100 name the server image by
+	// digest instead of by tag. Leave it out to use defaultSHAWeight.
+	SHAImageWeight *int `json:"shaImageWeight,omitempty"`
 }
-
-// --- Output type ---
 
 type MatrixOutput struct {
-	Refspec                 string `json:"refspec"`
-	VersionBranch           string `json:"version_branch"`
-	Platform                string `json:"platform"`
-	PlatformType            string `json:"platform_type"`
-	KubernetesVersion       string `json:"kubernetes_version"`
-	KubectlVersion          string `json:"kubectl_version"`
-	ServerImage             string `json:"server_image"`
-	ServerImageUpgrade      string `json:"server_image_upgrade"`
-	OperatorImage           string `json:"operator_image"`
-	AdmissionImage          string `json:"admission_image"`
-	CertificationImage      string `json:"certification_image"`
-	BackupImage             string `json:"backup_image"`
-	ExporterImage           string `json:"exporter_image"`
-	ExporterImageUpgrade    string `json:"exporter_image_upgrade"`
-	LoggingImage            string `json:"logging_image"`
-	LoggingImageUpgrade     string `json:"logging_image_upgrade"`
-	CloudNativeGatewayImage string `json:"cloud_native_gateway_image"`
-	MobileImage             string `json:"mobile_image"`
-	StorageClass            string `json:"storage_class"`
+	Refspec            string `json:"refspec"`
+	VersionBranch      string `json:"version_branch"`
+	Platform           string `json:"platform"`
+	PlatformType       string `json:"platform_type"`
+	KubernetesVersion  string `json:"kubernetes_version"`
+	KubectlVersion     string `json:"kubectl_version"`
+	ServerImage        string `json:"server_image"`
+	ServerImageUpgrade string `json:"server_image_upgrade"`
+	// The plain versions are always sent, even when the images above are
+	// digests. A digest does not say which version it is, and the test
+	// framework only knows the digests of released builds, so without these
+	// it falls back to a placeholder version and version checks go wrong.
+	ServerImageVersion        string `json:"server_image_version"`
+	ServerImageUpgradeVersion string `json:"server_image_upgrade_version"`
+	OperatorImage             string `json:"operator_image"`
+	AdmissionImage            string `json:"admission_image"`
+	CertificationImage        string `json:"certification_image"`
+	BackupImage               string `json:"backup_image"`
+	ExporterImage             string `json:"exporter_image"`
+	ExporterImageUpgrade      string `json:"exporter_image_upgrade"`
+	LoggingImage              string `json:"logging_image"`
+	LoggingImageUpgrade       string `json:"logging_image_upgrade"`
+	CloudNativeGatewayImage   string `json:"cloud_native_gateway_image"`
+	MobileImage               string `json:"mobile_image"`
+	StorageClass              string `json:"storage_class"`
 }
-
-// --- Manifest XML types ---
 
 type ManifestAnnotation struct {
 	Name  string `xml:"name,attr"`
@@ -83,8 +92,6 @@ type Manifest struct {
 	Default  struct{}          `xml:"default"`
 	Projects []ManifestProject `xml:"project"`
 }
-
-// --- GHCR types ---
 
 type GHCRToken struct {
 	Token string `json:"token"`
@@ -106,6 +113,7 @@ func main() {
 	ghcrPass := flag.String("ghcr-pass", "", "GHCR password/PAT for authenticated tag listing")
 	branchOverride := flag.String("branch", "", "Override branch selection (e.g. master, 2.9.x)")
 	listBranches := flag.Bool("list-branches", false, "Print enabled branch names as JSON array and exit")
+	shaWeightOverride := flag.Int("sha-weight", -1, "Override percentage of runs using digest refs instead of tags (0-100, -1 uses config)")
 	flag.Parse()
 
 	if *ghcrUser == "" {
@@ -125,7 +133,11 @@ func main() {
 		log.Fatalf("Failed to parse config: %v", err)
 	}
 
-	// List enabled branches mode -- used by Jenkinsfile to iterate.
+	if *shaWeightOverride >= 0 {
+		config.SHAImageWeight = shaWeightOverride
+	}
+
+	// List enabled branches mode, used by Jenkinsfile to iterate.
 	if *listBranches {
 		var names []string
 		for _, v := range config.Versions {
@@ -218,30 +230,40 @@ func generateMatrixForBranch(config MatrixConfig, now time.Time, skipManifest bo
 	// Step 7: Build all images
 	serverImage := resolveServerImage(serverVersion, platform)
 	upgradeImage := resolveServerImage(upgradeVersion, platform)
+
+	// Step 7b: Optionally reference the server images by digest instead of tag.
+	// skipManifest doubles as offline mode, so tests do not hit the registry.
+	if !skipManifest {
+		w := shaWeight(config)
+		serverImage = maybeSHAImage(serverImage, w, now, shaOffsetServer, ghcrUser, ghcrPass, "server_image")
+		upgradeImage = maybeSHAImage(upgradeImage, w, now, shaOffsetUpgrade, ghcrUser, ghcrPass, "server_image_upgrade")
+	}
 	operatorImage, admissionImage, certImage, backupImage, loggingImage, cngImage, mobileImage := resolveSidecarImages(platform, operatorTag)
 
 	kubectlVersion := resolveKubectlVersion(k8sVersion, platform)
 
 	return MatrixOutput{
-		Refspec:                 branch.Refspec,
-		VersionBranch:           branch.VersionBranch,
-		Platform:                platform.Name,
-		PlatformType:            platform.PlatformType,
-		KubernetesVersion:       k8sVersion,
-		KubectlVersion:          kubectlVersion,
-		ServerImage:             serverImage,
-		ServerImageUpgrade:      upgradeImage,
-		OperatorImage:           operatorImage,
-		AdmissionImage:          admissionImage,
-		CertificationImage:      certImage,
-		BackupImage:             backupImage,
-		ExporterImage:           "couchbase/exporter:1.0.10",
-		ExporterImageUpgrade:    "couchbase/exporter:1.0.5",
-		LoggingImage:            loggingImage,
-		LoggingImageUpgrade:     "couchbase/fluent-bit:1.1.1",
-		CloudNativeGatewayImage: cngImage,
-		MobileImage:             mobileImage,
-		StorageClass:            platform.StorageClass,
+		Refspec:                   branch.Refspec,
+		VersionBranch:             branch.VersionBranch,
+		Platform:                  platform.Name,
+		PlatformType:              platform.PlatformType,
+		KubernetesVersion:         k8sVersion,
+		KubectlVersion:            kubectlVersion,
+		ServerImage:               serverImage,
+		ServerImageUpgrade:        upgradeImage,
+		ServerImageVersion:        serverVersion,
+		ServerImageUpgradeVersion: upgradeVersion,
+		OperatorImage:             operatorImage,
+		AdmissionImage:            admissionImage,
+		CertificationImage:        certImage,
+		BackupImage:               backupImage,
+		ExporterImage:             "couchbase/exporter:1.0.10",
+		ExporterImageUpgrade:      "couchbase/exporter:1.0.5",
+		LoggingImage:              loggingImage,
+		LoggingImageUpgrade:       "couchbase/fluent-bit:1.1.1",
+		CloudNativeGatewayImage:   cngImage,
+		MobileImage:               mobileImage,
+		StorageClass:              platform.StorageClass,
 	}
 }
 
@@ -492,6 +514,77 @@ func resolveKubectlVersion(k8sVersion string, platform Platform) string {
 	}
 	// Already has patch, e.g. "1.31.1"
 	return k8sVersion
+}
+
+// defaultSHAWeight is how many runs out of 100 use a digest instead of a tag
+// when the config does not say.
+const defaultSHAWeight = 25
+
+// Each image adds a different number to the random seed, so the server image
+// and the upgrade image are decided separately. Over time that gives all four
+// mixes: tag->tag, tag->sha, sha->tag and sha->sha.
+const (
+	shaOffsetServer  = 101
+	shaOffsetUpgrade = 202
+)
+
+func shaWeight(config MatrixConfig) int {
+	if config.SHAImageWeight == nil {
+		return defaultSHAWeight
+	}
+	return *config.SHAImageWeight
+}
+
+// shouldUseSHA decides whether to use a digest instead of a tag. The answer
+// comes from the date, so running the same day twice gives the same answer.
+func shouldUseSHA(weight int, now time.Time, offset int64) bool {
+	if weight <= 0 {
+		return false
+	}
+	if weight >= 100 {
+		return true
+	}
+	rng := rand.New(rand.NewSource(int64(now.Year()*1000+now.YearDay()) + offset))
+	return rng.Intn(100) < weight
+}
+
+// toDigestRef turns repo:tag into repo@sha256:... The last colon is only a tag
+// if it comes after the last slash. If not, it is a port, like localhost:5000.
+func toDigestRef(image, digest string) string {
+	repo := image
+	if i := strings.LastIndex(image, ":"); i > strings.LastIndex(image, "/") {
+		repo = image[:i]
+	}
+	return repo + "@" + digest
+}
+
+// resolveImageDigest asks the registry which image the tag points at right now.
+func resolveImageDigest(image, ghcrUser, ghcrPass string) (string, error) {
+	var opts []crane.Option
+	if strings.HasPrefix(image, "ghcr.io/") && ghcrUser != "" && ghcrPass != "" {
+		opts = append(opts, crane.WithAuth(&authn.Basic{Username: ghcrUser, Password: ghcrPass}))
+	}
+	return crane.Digest(image, opts...)
+}
+
+// maybeSHAImage turns a tag into a digest when the roll picks SHA. If the
+// lookup fails we keep the tag. OpenShift always lands here, since its
+// registry needs a Red Hat login the pipeline does not have.
+func maybeSHAImage(image string, weight int, now time.Time, offset int64, ghcrUser, ghcrPass, label string) string {
+	if !shouldUseSHA(weight, now, offset) {
+		log.Printf("%s: using tag %s", label, image)
+		return image
+	}
+
+	digest, err := resolveImageDigest(image, ghcrUser, ghcrPass)
+	if err != nil {
+		log.Printf("WARNING: %s: could not resolve digest for %s: %v. Falling back to tag", label, image, err)
+		return image
+	}
+
+	ref := toDigestRef(image, digest)
+	log.Printf("%s: using digest %s", label, ref)
+	return ref
 }
 
 func resolveServerImage(version string, platform Platform) string {

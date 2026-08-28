@@ -38,6 +38,9 @@ pipeline {
       steps {
         sh "mkdir -p ${env.WORKSPACE}/bin"
         sh "wget -q -O- https://dl.google.com/go/go${env.GOVERSION}.linux-amd64.tar.gz | tar xz"
+        // Fetch module dependencies up front so a download failure surfaces
+        // here rather than midway through matrix generation.
+        sh "go mod download"
       }
     }
 
@@ -96,6 +99,8 @@ pipeline {
               string(name: 'certification_image', value: matrix.certification_image),
               string(name: 'server_image', value: matrix.server_image),
               string(name: 'server_image_upgrade', value: matrix.server_image_upgrade),
+              string(name: 'server_image_version', value: matrix.server_image_version),
+              string(name: 'server_image_upgrade_version', value: matrix.server_image_upgrade_version),
               string(name: 'backup_image', value: matrix.backup_image),
               string(name: 'exporter_image', value: matrix.exporter_image),
               string(name: 'exporter_image_upgrade', value: matrix.exporter_image_upgrade),
