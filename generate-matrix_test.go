@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -408,5 +409,203 @@ func TestConfigValidation(t *testing.T) {
 		if len(version.SupportedPlatforms) == 0 {
 			t.Errorf("No platforms for branch %s", version.VersionBranch)
 		}
+	}
+}
+
+func TestSHAWeightDefault(t *testing.T) {
+	if got := shaWeight(MatrixConfig{}); got != defaultSHAWeight {
+		t.Errorf("unset weight should default to %d, got %d", defaultSHAWeight, got)
+	}
+
+	zero, fifty := 0, 50
+	if got := shaWeight(MatrixConfig{SHAImageWeight: &zero}); got != 0 {
+		t.Errorf("explicit 0 should stay 0, got %d", got)
+	}
+	if got := shaWeight(MatrixConfig{SHAImageWeight: &fifty}); got != 50 {
+		t.Errorf("explicit 50 should stay 50, got %d", got)
+	}
+}
+
+func TestShouldUseSHAEdges(t *testing.T) {
+	date := time.Date(2026, 5, 8, 0, 0, 0, 0, time.UTC)
+
+	for day := 1; day <= 60; day++ {
+		d := date.AddDate(0, 0, day)
+		if shouldUseSHA(0, d, shaOffsetServer) {
+			t.Fatalf("weight 0 should never select SHA (day %d)", day)
+		}
+		if !shouldUseSHA(100, d, shaOffsetServer) {
+			t.Fatalf("weight 100 should always select SHA (day %d)", day)
+		}
+	}
+}
+
+func TestShouldUseSHADistribution(t *testing.T) {
+	sha := 0
+	for day := 1; day <= 365; day++ {
+		d := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, day-1)
+		if shouldUseSHA(defaultSHAWeight, d, shaOffsetServer) {
+			sha++
+		}
+	}
+
+	// Roughly the configured 25%. Wide bounds, this is a seeded roll, not a
+	// statistical guarantee.
+	pct := 100 * sha / 365
+	if pct < 15 || pct > 35 {
+		t.Errorf("expected roughly %d%% SHA runs, got %d%% (%d/365)", defaultSHAWeight, pct, sha)
+	}
+	t.Logf("SHA selected on %d of 365 days (%d%%)", sha, pct)
+}
+
+func TestShouldUseSHAIsDeterministic(t *testing.T) {
+	date := time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC)
+	expected := shouldUseSHA(defaultSHAWeight, date, shaOffsetServer)
+	for i := 0; i < 10; i++ {
+		if got := shouldUseSHA(defaultSHAWeight, date, shaOffsetServer); got != expected {
+			t.Fatal("same date must produce the same choice")
+		}
+	}
+}
+
+// The ticket requires sha->sha, tag->sha and sha->tag upgrades to all occur.
+func TestSHACombinationsAllOccur(t *testing.T) {
+	seen := make(map[string]int)
+	for day := 1; day <= 365; day++ {
+		d := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, day-1)
+		from := shouldUseSHA(defaultSHAWeight, d, shaOffsetServer)
+		to := shouldUseSHA(defaultSHAWeight, d, shaOffsetUpgrade)
+		seen[shaLabel(from)+"->"+shaLabel(to)]++
+	}
+
+	for _, combo := range []string{"tag->tag", "tag->sha", "sha->tag", "sha->sha"} {
+		if seen[combo] == 0 {
+			t.Errorf("combination %s never occurred over 365 days: %v", combo, seen)
+		}
+	}
+	t.Logf("upgrade combinations over 365 days: %v", seen)
+}
+
+func shaLabel(isSHA bool) string {
+	if isSHA {
+		return "sha"
+	}
+	return "tag"
+}
+
+func TestToDigestRef(t *testing.T) {
+	const dg = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	tests := []struct {
+		name  string
+		image string
+		want  string
+	}{
+		{"tagged ghcr image", "ghcr.io/cb-vanilla/server:8.5.0", "ghcr.io/cb-vanilla/server@" + dg},
+		{"tagged redhat image", "registry.connect.redhat.com/couchbase/server:7.6.12", "registry.connect.redhat.com/couchbase/server@" + dg},
+		{"no tag", "ghcr.io/cb-vanilla/server", "ghcr.io/cb-vanilla/server@" + dg},
+		{"registry with port, no tag", "localhost:5000/server", "localhost:5000/server@" + dg},
+		{"registry with port and tag", "localhost:5000/server:8.5.0", "localhost:5000/server@" + dg},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := toDigestRef(tt.image, dg); got != tt.want {
+				t.Errorf("toDigestRef(%q) = %q, want %q", tt.image, got, tt.want)
+			}
+		})
+	}
+}
+
+// Offline mode must not reach the registry, so images stay tagged.
+func TestOfflineModeKeepsTags(t *testing.T) {
+	config := loadTestConfig(t)
+	date := time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC)
+
+	out := generateMatrix(config, date, true, "")
+	for name, img := range map[string]string{
+		"server_image":         out.ServerImage,
+		"server_image_upgrade": out.ServerImageUpgrade,
+	} {
+		if strings.Contains(img, "@sha256:") {
+			t.Errorf("%s should stay tagged in offline mode, got %s", name, img)
+		}
+	}
+}
+
+// The plain versions must always be present, whether the image is a tag or a
+// digest. Without them the test framework cannot tell what version a digest is.
+func TestServerImageVersionsAlwaysSet(t *testing.T) {
+	config := loadTestConfig(t)
+
+	for day := 1; day <= 60; day++ {
+		date := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, day-1)
+		out := generateMatrix(config, date, true, "")
+
+		if out.ServerImageVersion == "" {
+			t.Fatalf("%s: server_image_version is empty", date.Format("2006-01-02"))
+		}
+		if out.ServerImageUpgradeVersion == "" {
+			t.Fatalf("%s: server_image_upgrade_version is empty", date.Format("2006-01-02"))
+		}
+
+		// Offline mode emits tags, so the tag must match the reported version.
+		if want := ":" + out.ServerImageVersion; !strings.HasSuffix(out.ServerImage, want) {
+			t.Errorf("%s: server_image %q does not end in %q", date.Format("2006-01-02"), out.ServerImage, want)
+		}
+		if want := ":" + out.ServerImageUpgradeVersion; !strings.HasSuffix(out.ServerImageUpgrade, want) {
+			t.Errorf("%s: server_image_upgrade %q does not end in %q", date.Format("2006-01-02"), out.ServerImageUpgrade, want)
+		}
+	}
+}
+
+// The version fields describe the images, so they must survive a digest swap.
+func TestVersionsUnaffectedByDigestSwap(t *testing.T) {
+	config := loadTestConfig(t)
+	date := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+
+	out := generateMatrix(config, date, true, "")
+	if out.ServerImageVersion != "8.0.2" {
+		t.Errorf("expected server_image_version 8.0.2 for this date, got %s", out.ServerImageVersion)
+	}
+	if out.ServerImageUpgradeVersion != "7.2.9" {
+		t.Errorf("expected server_image_upgrade_version 7.2.9 for this date, got %s", out.ServerImageUpgradeVersion)
+	}
+}
+
+func TestValidSHAWeight(t *testing.T) {
+	for _, w := range []int{0, 1, 25, 99, 100} {
+		if !validSHAWeight(w) {
+			t.Errorf("%d should be a valid weight", w)
+		}
+	}
+	for _, w := range []int{-100, -2, -1, 101, 250} {
+		if validSHAWeight(w) {
+			t.Errorf("%d should be rejected", w)
+		}
+	}
+}
+
+// Only GHCR can be authenticated, so other registries keep their tag and the
+// registry is never contacted. This test would hang or fail on a lookup.
+func TestMaybeSHAImageSkipsNonGHCR(t *testing.T) {
+	date := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	redhat := "registry.connect.redhat.com/couchbase/server:8.0.2"
+
+	// weight 100 forces the roll to pick SHA, so only the registry check can
+	// be what keeps the tag.
+	got := maybeSHAImage(redhat, 100, date, shaOffsetServer, "", "", "server_image")
+	if got != redhat {
+		t.Errorf("non-GHCR image should keep its tag, got %s", got)
+	}
+}
+
+func TestMaybeSHAImageKeepsTagWhenRollSaysTag(t *testing.T) {
+	date := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	img := "ghcr.io/cb-vanilla/server:8.0.2"
+
+	// weight 0 never selects SHA, so no lookup happens.
+	if got := maybeSHAImage(img, 0, date, shaOffsetServer, "", "", "server_image"); got != img {
+		t.Errorf("expected tag unchanged, got %s", got)
 	}
 }
