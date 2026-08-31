@@ -572,3 +572,40 @@ func TestVersionsUnaffectedByDigestSwap(t *testing.T) {
 		t.Errorf("expected server_image_upgrade_version 7.2.9 for this date, got %s", out.ServerImageUpgradeVersion)
 	}
 }
+
+func TestValidSHAWeight(t *testing.T) {
+	for _, w := range []int{0, 1, 25, 99, 100} {
+		if !validSHAWeight(w) {
+			t.Errorf("%d should be a valid weight", w)
+		}
+	}
+	for _, w := range []int{-100, -2, -1, 101, 250} {
+		if validSHAWeight(w) {
+			t.Errorf("%d should be rejected", w)
+		}
+	}
+}
+
+// Only GHCR can be authenticated, so other registries keep their tag and the
+// registry is never contacted. This test would hang or fail on a lookup.
+func TestMaybeSHAImageSkipsNonGHCR(t *testing.T) {
+	date := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	redhat := "registry.connect.redhat.com/couchbase/server:8.0.2"
+
+	// weight 100 forces the roll to pick SHA, so only the registry check can
+	// be what keeps the tag.
+	got := maybeSHAImage(redhat, 100, date, shaOffsetServer, "", "", "server_image")
+	if got != redhat {
+		t.Errorf("non-GHCR image should keep its tag, got %s", got)
+	}
+}
+
+func TestMaybeSHAImageKeepsTagWhenRollSaysTag(t *testing.T) {
+	date := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	img := "ghcr.io/cb-vanilla/server:8.0.2"
+
+	// weight 0 never selects SHA, so no lookup happens.
+	if got := maybeSHAImage(img, 0, date, shaOffsetServer, "", "", "server_image"); got != img {
+		t.Errorf("expected tag unchanged, got %s", got)
+	}
+}

@@ -133,7 +133,15 @@ func main() {
 		log.Fatalf("Failed to parse config: %v", err)
 	}
 
-	if *shaWeightOverride >= 0 {
+	if config.SHAImageWeight != nil && !validSHAWeight(*config.SHAImageWeight) {
+		log.Fatalf("Invalid shaImageWeight %d in config, must be 0-100", *config.SHAImageWeight)
+	}
+
+	// -1 means "not set", anything else has to be a real percentage.
+	if *shaWeightOverride != -1 {
+		if !validSHAWeight(*shaWeightOverride) {
+			log.Fatalf("Invalid -sha-weight %d, must be 0-100", *shaWeightOverride)
+		}
 		config.SHAImageWeight = shaWeightOverride
 	}
 
@@ -520,6 +528,10 @@ func resolveKubectlVersion(k8sVersion string, platform Platform) string {
 // when the config does not say.
 const defaultSHAWeight = 25
 
+// ghcrPrefix is the only registry we hold credentials for, so it is the only
+// one where a digest lookup can succeed.
+const ghcrPrefix = "ghcr.io/"
+
 // Each image adds a different number to the random seed, so the server image
 // and the upgrade image are decided separately. Over time that gives all four
 // mixes: tag->tag, tag->sha, sha->tag and sha->sha.
@@ -527,6 +539,11 @@ const (
 	shaOffsetServer  = 101
 	shaOffsetUpgrade = 202
 )
+
+// validSHAWeight reports whether w is a usable percentage.
+func validSHAWeight(w int) bool {
+	return w >= 0 && w <= 100
+}
 
 func shaWeight(config MatrixConfig) int {
 	if config.SHAImageWeight == nil {
@@ -561,18 +578,25 @@ func toDigestRef(image, digest string) string {
 // resolveImageDigest asks the registry which image the tag points at right now.
 func resolveImageDigest(image, ghcrUser, ghcrPass string) (string, error) {
 	var opts []crane.Option
-	if strings.HasPrefix(image, "ghcr.io/") && ghcrUser != "" && ghcrPass != "" {
+	if strings.HasPrefix(image, ghcrPrefix) && ghcrUser != "" && ghcrPass != "" {
 		opts = append(opts, crane.WithAuth(&authn.Basic{Username: ghcrUser, Password: ghcrPass}))
 	}
 	return crane.Digest(image, opts...)
 }
 
-// maybeSHAImage turns a tag into a digest when the roll picks SHA. If the
-// lookup fails we keep the tag. OpenShift always lands here, since its
-// registry needs a Red Hat login the pipeline does not have.
+// maybeSHAImage turns a tag into a digest when the roll picks SHA. We only
+// look up GHCR images, since that is the one registry we have a login for.
+// OpenShift pulls its server image from registry.connect.redhat.com, so it
+// keeps its tag. If a lookup fails we keep the tag as well.
 func maybeSHAImage(image string, weight int, now time.Time, offset int64, ghcrUser, ghcrPass, label string) string {
 	if !shouldUseSHA(weight, now, offset) {
 		log.Printf("%s: using tag %s", label, image)
+		return image
+	}
+
+	// Checked after the roll so this only shows up when a digest was wanted.
+	if !strings.HasPrefix(image, ghcrPrefix) {
+		log.Printf("%s: digests are not available for this registry, using tag %s", label, image)
 		return image
 	}
 
