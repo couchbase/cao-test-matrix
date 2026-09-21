@@ -621,7 +621,7 @@ func resolveServerImage(version string, platform Platform) string {
 func resolveSidecarImages(platform Platform, operatorTag string) (operator, admission, cert, backup, logging, cng, mobile string) {
 	if platform.PlatformType == "openshift" {
 		operator = fmt.Sprintf("ghcr.io/cb-rhcc/operator:%s", operatorTag)
-		admission = "ghcr.io/cb-rhcc/admission-controller:latest"
+		admission = fmt.Sprintf("ghcr.io/cb-rhcc/admission-controller:%s", operatorTag)
 		cert = fmt.Sprintf("ghcr.io/cb-rhcc/operator-certification:%s", operatorTag)
 		backup = "ghcr.io/cb-rhcc/operator-backup:latest"
 		logging = "ghcr.io/cb-rhcc/fluent-bit:latest"
@@ -629,7 +629,7 @@ func resolveSidecarImages(platform Platform, operatorTag string) (operator, admi
 		mobile = "ghcr.io/cb-rhcc/sync-gateway:latest"
 	} else {
 		operator = fmt.Sprintf("ghcr.io/cb-vanilla/operator:%s", operatorTag)
-		admission = "ghcr.io/cb-vanilla/admission-controller:latest"
+		admission = fmt.Sprintf("ghcr.io/cb-vanilla/admission-controller:%s", operatorTag)
 		cert = fmt.Sprintf("ghcr.io/cb-vanilla/operator-certification:%s", operatorTag)
 		backup = "ghcr.io/cb-vanilla/operator-backup:latest"
 		logging = "ghcr.io/cb-vanilla/fluent-bit:latest"
